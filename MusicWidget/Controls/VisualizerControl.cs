@@ -16,8 +16,8 @@ public class VisualizerControl : Canvas
     private const int BarCount = 28;
     private const int SegmentCount = 14;
     private const double GapRatio = 0.25;
-    private const double LerpSpeed = 0.6;
-    private const double TargetChangePct = 0.6;
+    private const double LerpSpeed = 0.5;
+    private const double TargetChangePct = 0.5;
     private const double PeakFallSpeed = 0.012;
     private const int PeakHoldFrames = 30;
     private const double ReflectAlpha = 0.35;
@@ -29,7 +29,7 @@ public class VisualizerControl : Canvas
     private readonly double[] _peaks = new double[BarCount];
     private readonly int[] _peakHold = new int[BarCount];
     private readonly Random _rng = new();
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(10) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(8) };
 
     private WriteableBitmap? _bitmap;
     private byte[]? _pixelBuffer;
