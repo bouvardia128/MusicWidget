@@ -41,7 +41,12 @@ namespace MusicWidget
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             _service.TrackChanged += info =>
-                Dispatcher.Invoke(() => _vm.Apply(info));
+                Dispatcher.Invoke(() =>
+                {
+                    _vm.Apply(info);
+                    Visualizer.IsPlaying = info.IsPlaying;
+                });
+
 
             await _service.InitializeAsync();
         }
