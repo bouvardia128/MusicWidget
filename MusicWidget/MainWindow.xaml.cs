@@ -1,4 +1,6 @@
-﻿using System.Windows;
+﻿using System.IO;
+using System.Text.Json;
+using System.Windows;
 using MusicWidget.Services;
 using MusicWidget.ViewModels;
 
@@ -9,7 +11,7 @@ namespace MusicWidget
     /// ウィンドウの表示、トレイアイコンの管理、ドラッグ移動やスナップ動作など、アプリケーションの主要な UI 機能を提供します。
     /// </summary>
     ///
-    /// <remarks>ウィンドウは画面下部中央に初期配置され、タスクトレイアイコンから表示・非表示を切り替えることができます。
+    /// <remarks>ウィンドウは最後に配置した位置を記憶し、次回起動時にはその位置から復元されます。
     /// ウィンドウのドラッグ移動時には、画面端へのスナップ機能が有効です。ウィンドウのライフサイクルに合わせて、関連サービスやリソースの管理も行います。
     /// </remarks>
     public partial class MainWindow : Window
@@ -20,6 +22,10 @@ namespace MusicWidget
 
         // スナップする距離の閾値（px）
         private const double SnapThreshold = 30;
+
+        private static readonly string PositionFilePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MusicWidget", "windowpos.json");
 
         /// <summary>
         /// コンストラクタ
@@ -52,14 +58,52 @@ namespace MusicWidget
         }
 
         /// <summary>
-        /// 画面下部中央にウィンドウを配置します。
-        /// 画面の作業領域を取得し、ウィンドウの幅と高さを考慮して、適切なLeftとTopの値を計算して設定します。
+        /// ウィンドウを配置します。前回保存した位置があればそこに復元し、なければ画面下部中央に配置します。
         /// </summary>
         private void PositionWindow()
         {
-            var screen = SystemParameters.WorkArea;
-            Left = (screen.Width - Width) / 2;
-            Top = screen.Height - Height;
+            if (!TryLoadPosition(out var left, out var top))
+            {
+                var screen = SystemParameters.WorkArea;
+                left = (screen.Width - Width) / 2;
+                top = screen.Height - Height;
+            }
+
+            Left = left;
+            Top = top;
+            SavePosition();
+        }
+
+        /// <summary>
+        /// 現在のウィンドウ位置をファイルに保存します。
+        /// </summary>
+        private void SavePosition()
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(PositionFilePath)!);
+                var json = JsonSerializer.Serialize(new { Left, Top });
+                File.WriteAllText(PositionFilePath, json);
+            }
+            catch { /* 保存失敗は無視 */ }
+        }
+
+        /// <summary>
+        /// 保存されたウィンドウ位置を読み込みます。
+        /// </summary>
+        private static bool TryLoadPosition(out double left, out double top)
+        {
+            left = 0;
+            top = 0;
+            try
+            {
+                if (!File.Exists(PositionFilePath)) return false;
+                using var doc = JsonDocument.Parse(File.ReadAllText(PositionFilePath));
+                left = doc.RootElement.GetProperty("Left").GetDouble();
+                top = doc.RootElement.GetProperty("Top").GetDouble();
+                return true;
+            }
+            catch { return false; }
         }
 
         /// <summary>
@@ -104,23 +148,24 @@ namespace MusicWidget
         }
 
         /// <summary>
-        /// マウスボタンイベントを利用して、ウィンドウのドラッグ移動を実装します。
+        /// ウィンドウをドラッグ移動し、ドロップ後に画面端へのスナップと位置保存を行います。
+        /// DragMove() はドロップまでブロックする同期呼び出しのため、その直後にスナップ処理を実行します。
         /// </summary>
-        /// <param name="sender">ドラッグ操作を発生させたオブジェクト。通常はウィンドウ自身です。</param>
-        /// <param name="e">マウスボタンイベントのデータを含むオブジェクト。</param>
         private void OnDragMove(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (e.ButtonState == System.Windows.Input.MouseButtonState.Pressed)
-                DragMove();
+            if (e.ButtonState != System.Windows.Input.MouseButtonState.Pressed) return;
+
+            DragMove();
+
+            // DragMove() はドロップ完了まで戻らないため、ここはドロップ後に実行される
+            SnapToEdge();
+            SavePosition();
         }
 
         /// <summary>
-        /// ドラッグ操作の終了時にウィンドウ位置を調整し、画面端にスナップさせます。
+        /// ウィンドウが画面端に近い場合、自動的に端に揃えます。DPI スケーリングも考慮されます。
         /// </summary>
-        /// <remarks>ウィンドウの中心点が属するモニターの作業領域に基づき、ウィンドウが画面端に近い場合は自動的に端に揃えます。DPI スケーリングも考慮されます。</remarks>
-        /// <param name="sender">ドラッグ操作を発生させたオブジェクト。通常はウィンドウ自身です。</param>
-        /// <param name="e">マウスボタンイベントのデータを含むオブジェクト。</param>
-        private void OnDragEnd(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private void SnapToEdge()
         {
             // ウィンドウ中心点がどのモニター上にあるかを特定
             var centerX = (int)(Left + Width / 2);

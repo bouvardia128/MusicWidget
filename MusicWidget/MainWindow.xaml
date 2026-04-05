@@ -22,8 +22,7 @@
     <!-- 全体を角丸パネルで囲む -->
     <Border Background="{StaticResource PanelBrush}"
             CornerRadius="6"
-            MouseLeftButtonDown="OnDragMove"
-            MouseLeftButtonUp="OnDragEnd">
+            MouseLeftButtonDown="OnDragMove">
         <Grid>
             <Grid.ColumnDefinitions>
                 <!-- アートワーク（正方形120px） -->
